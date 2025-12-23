@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>All-in-One App: Routing, Validation, Sessions, Attendance, Event Card</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #0f172a; --surface: #0b1222; --card: #0c1325; --border: #1f2937;
+      --text: #e5e7eb; --muted: #94a3b8; --accent: #2563eb; --accent-2: #1d4ed8;
+      --success: #10b981; --danger: #ef4444; --warn: #f59e0b;
+    }
+    * { box-sizing: border-box }
+    body {
+      margin: 0; min-height: 100vh; background: #0b1020; color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+      display: grid; grid-template-rows: auto 1fr; gap: 0;
+    }
+    header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: #0a0f1d;
+      position: sticky; top: 0; z-index: 20;
+    }
+    nav { display: flex; gap: 0.8rem; flex-wrap: wrap }
+    a.nav {
+      color: #cbd5e1; text-decoration: none; padding: 0.35rem 0.6rem; border-radius: 8px;
+      border: 1px solid transparent;
+    }
+    a.nav.active { border-color: #223055; background: #0c1730 }
+    .brand { font-weight: 600; letter-spacing: 0.2px }
+    .user { display: flex; gap: 0.6rem; align-items: center; color: #cbd5e1 }
+
+    main { padding: 1rem; width: min(1100px, 92vw); margin: 0 auto }
+    .panel {
+      background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+      border: 1px solid var(--border); border-radius: 16px; padding: 1rem; backdrop-filter: blur(6px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04);
+      margin-bottom: 1rem;
+    }
+    h2 { margin: 0 0 0.75rem 0; font-size: 1.2rem }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem }
+    .field { display: grid; gap: 0.35rem; margin-bottom: 0.8rem }
+    .field label { font-size: 0.85rem; color: var(--muted) }
+    .input, textarea, select {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text);
+      border-radius: 10px; padding: 0.6rem 0.7rem; outline: none; transition: border-color 140ms ease, box-shadow 140ms ease;
+      font-size: 0.95rem;
+    }
+    .input:focus, textarea:focus, select:focus {
+      border-color: #334155; box-shadow: 0 0 0 4px rgba(37,99,235,0.18);
+    }
+    textarea { min-height: 120px; resize: vertical }
+    .btn { background: var(--accent); color: white; border: none; border-radius: 10px; padding: 0.55rem 0.75rem; font-size: 0.92rem; cursor: pointer }
+    .btn.secondary { background: transparent; color: #93c5fd; border: 1px solid var(--accent-2) }
+    .btn.ghost { background: transparent; color: #cbd5e1; border: 1px dashed #223055 }
+    .btn + .btn { margin-left: 0.5rem }
+    .muted { color: var(--muted); font-size: 0.9rem }
+
+    /* Event card */
+    .card {
+      display: grid; gap: 0.75rem; padding: 1rem; border-radius: 14px; background: linear-gradient(180deg, var(--card), #0a0f1d);
+      border: 1px solid #182033;
+    }
+    .card-header { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem }
+    .title { font-weight: 650; font-size: 1.25rem; letter-spacing: 0.2px }
+    .badge { font-size: 0.85rem; color: #cbd5e1; background: rgba(37,99,235,0.15); border: 1px solid rgba(37,99,235,0.35); padding: 0.35rem 0.6rem; border-radius: 999px }
+    .meta { display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.92rem; color: #cbd5e1 }
+    .meta span { display: inline-flex; align-items: center; gap: 0.4rem; background: #0c1730; border: 1px solid #223055; padding: 0.35rem 0.55rem; border-radius: 8px }
+    .desc { color: #e2e8f0; line-height: 1.5; background: var(--surface); border: 1px solid #182033; padding: 0.85rem; border-radius: 10px; white-space: pre-wrap }
+
+    /* Forms & validation */
+    .error { color: var(--danger); font-size: 0.85rem }
+    .success { color: var(--success); font-size: 0.9rem }
+    .warn { color: var(--warn); font-size: 0.9rem }
+
+    /* Attendance list */
+    ul.list { list-style: none; padding: 0; margin: 0.5rem 0 }
+    ul.list li { padding: 0.4rem 0.6rem; border: 1px solid var(--border); border-radius: 8px; margin-bottom: 0.5rem; background: #0a1324 }
+
+    /* Footer/info */
+    footer { padding: 0.75rem 1rem; color: var(--muted); border-top: 1px solid var(--border); background: #091223 }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">All-in-One App</div>
+    <nav id="nav"></nav>
+    <div class="user" id="userBar"></div>
+  </header>
+
+  <main id="app"></main>
+
+  <footer>
+    Built as a single-file demo: hash-based routing, validation, sessions, attendance tracking, and an event card with two-way binding.
+  </footer>
+
+  <script>
+    // ---------- Utilities ----------
+    const $ = (sel, root = document) => root.querySelector(sel);
+    const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+    const formatDate = (iso) => {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (Number.isNaN(d.getTime())) return '—';
+      return d.toLocaleDateString();
+    };
+    const debounce = (fn, ms = 250) => {
+      let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+    };
+
+    // ---------- Session & storage ----------
+    const store = {
+      get(key, fallback) {
+        try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback; } catch { return fallback; }
+      },
+      set(key, value) {
+        try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+      },
+      remove(key) { try { localStorage.removeItem(key); } catch {} }
+    };
+    const Session = {
+      key: 'session.user',
+      get() { return store.get(this.key, null); },
+      set(user) { store.set(this.key, user); renderUserBar(); },
+      clear() { store.remove(this.key); renderUserBar(); },
+      isAuthed() { return !!this.get(); }
+    };
+
+    // ---------- Router ----------
+    const routes = {
+      '/': { title: 'Home', render: renderHome },
+      '/event': { title: 'Event', render: renderEvent },
+      '/register': { title: 'Register', render: renderRegister },
+      '/login': { title: 'Login', render: renderLogin },
+      '/attendance': { title: 'Attendance', render: renderAttendance, auth: true },
+      '/404': { title: 'Not found', render: renderNotFound }
+    };
+    function go(path) { location.hash = '#' + path; }
+    function currentPath() { const h = location.hash.replace(/^#/, '') || '/'; return h; }
+    function routeGuard(path) {
+      const r = routes[path];
+      if (!r) return '/404';
+      if (r.auth && !Session.isAuthed()) return '/login';
+      return path;
+    }
+    function renderNav() {
+      const nav = $('#nav'); nav.innerHTML = '';
+      const items = ['/', '/event', '/register', '/attendance'];
+      items.forEach(p => {
+        const a = document.createElement('a');
+        a.href = '#' + p; a.textContent = routes[p].title; a.className = 'nav' + (currentPath() === p ? ' active' : '');
+        nav.appendChild(a);
+      });
+    }
+    function renderUserBar() {
+      const bar = $('#userBar'); const user = Session.get();
+      bar.innerHTML = '';
+      if (user) {
+        const span = document.createElement('span'); span.textContent = `Hello, ${user.username}`;
+        const btn = document.createElement('button'); btn.className = 'btn secondary'; btn.textContent = 'Logout';
+        btn.addEventListener('click', () => { Session.clear(); go('/'); });
+        bar.append(span, btn);
+      } else {
+        const link = document.createElement('a'); link.href = '#/login'; link.className = 'nav'; link.textContent = 'Login';
+        bar.appendChild(link);
+      }
+    }
+    function renderApp() {
+      const root = $('#app'); root.innerHTML = '';
+      const raw = currentPath();
+      const path = routeGuard(raw);
+      const route = routes[path];
+      document.title = `All-in-One • ${route.title}`;
+      renderNav();
+      route.render(root);
+    }
+    window.addEventListener('hashchange', () => {
+      try { renderApp(); } catch (e) { console.error(e); go('/404'); }
+    });
+    window.addEventListener('DOMContentLoaded', () => { renderUserBar(); renderApp(); });
+
+    // ---------- Views ----------
+    function section(title) {
+      const s = document.createElement('section'); s.className = 'panel';
+      const h = document.createElement('h2'); h.textContent = title;
+      s.appendChild(h); return s;
+    }
+
+    // Home
+    function renderHome(root) {
+      const s = section('Welcome');
+      const p = document.createElement('p');
+      p.className = 'muted';
+      p.textContent = 'Navigate using the top bar: Event card, Registration, Login, and Attendance.';
+      s.appendChild(p);
+      root.appendChild(s);
+    }
+
+    // Event card with two-way binding (Proxy), validation, and status badge
+    function renderEvent(root) {
+      const wrap = document.createElement('div'); wrap.className = 'grid-2';
+
+      // Left: form
+      const formPanel = section('Event details');
+      formPanel.innerHTML += `
+        <div class="field">
+          <label for="title">Title</label>
+          <input id="title" class="input" type="text" data-bind="title" required placeholder="e.g., Product Launch"/>
+          <div class="error" data-error="title"></div>
+        </div>
+        <div class="grid-2">
+          <div class="field">
+            <label for="date">Date</label>
+            <input id="date" class="input" type="date" data-bind="date" required />
+            <div class="error" data-error="date"></div>
+          </div>
+          <div class="field">
+            <label for="location">Location</label>
+            <input id="location" class="input" type="text" data-bind="location" placeholder="e.g., Mumbai, India"/>
+            <div class="error" data-error="location"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="description">Description</label>
+          <textarea id="description" data-bind="description" placeholder="What should attendees know?"></textarea>
+          <div class="warn" id="descCount"></div>
+        </div>
+        <div>
+          <button class="btn" id="simulateChange">Programmatic update</button>
+          <button class="btn secondary" id="reset">Reset</button>
+        </div>
+        <p class="muted">Two-way binding: editing fields updates the card and the model; programmatic changes re-sync the UI.</p>
+      `;
+
+      // Right: card
+      const cardPanel = section('Event card');
+      const card = document.createElement('div'); card.className = 'card';
+      card.innerHTML = `
+        <div class="card-header">
+          <div class="title" id="cardTitle">—</div>
+          <div class="badge" id="cardBadge">Upcoming</div>
+        </div>
+        <div class="meta">
+          <span id="cardDate">📅 —</span>
+          <span id="cardLocation">📍 —</span>
+        </div>
+        <div class="desc" id="cardDescription">—</div>
+      `;
+      cardPanel.appendChild(card);
+
+      wrap.append(formPanel, cardPanel);
+      root.appendChild(wrap);
+
+      // Model
+      const event = {
+        title: 'Product Launch',
+        date: new Date().toISOString().slice(0, 10),
+        location: 'Mumbai, India',
+        description: 'Join us for the unveiling of our latest release. Limited seats — RSVP soon!'
+      };
+
+      // Render + validation
+      function computeBadge(model) {
+        const today = new Date(); today.setHours(0,0,0,0);
+        const d = new Date(model.date);
+        if (Number.isNaN(d.getTime())) return '—';
+        d.setHours(0,0,0,0);
+        if (d.getTime() === today.getTime()) return 'Today';
+        return d > today ? 'Upcoming' : 'Past';
+      }
+      function render(model) {
+        $('#cardTitle').textContent = model.title || '—';
+        $('#cardDate').textContent = `📅 ${formatDate(model.date)}`;
+        $('#cardLocation').textContent = `📍 ${model.location || '—'}`;
+        $('#cardDescription').textContent = model.description || '—';
+        $('#cardBadge').textContent = computeBadge(model);
+
+        // Simple validation messages
+        $('[data-error="title"]').textContent = !model.title ? 'Title is required' : '';
+        const d = new Date(model.date);
+        $('[data-error="date"]').textContent = Number.isNaN(d.getTime()) ? 'Valid date is required' : '';
+        const locOk = !model.location || model.location.length >= 2;
+        $('[data-error="location"]').textContent = !locOk ? 'Location must be 2+ characters' : '';
+      }
+      function syncInputs(model) {
+        $$('[data-bind]').forEach(el => {
+          const key = el.dataset.bind;
+          const value = model[key] ?? '';
+          if (el.value !== value) el.value = value;
+        });
+      }
+      const eventProxy = new Proxy(event, {
+        set(target, prop, value) {
+          target[prop] = value;
+          render(target);
+          syncInputs(target);
+          return true;
+        }
+      });
+
+      // Initial
+      render(eventProxy);
+      syncInputs(eventProxy);
+
+      // Debounced description counter
+      const updateDescCount = debounce(() => {
+        const len = eventProxy.description?.length ?? 0;
+        $('#descCount').textContent = len ? `${len} characters` : '';
+      }, 150);
+
+      // Bind inputs
+      $$('[data-bind]').forEach(el => {
+        const key = el.dataset.bind;
+        const handler = () => { eventProxy[key] = el.value; updateDescCount(); };
+        el.addEventListener('input', handler);
+        el.addEventListener('change', handler);
+      });
+
+      // Programmatic updates
+      $('#simulateChange').addEventListener('click', () => {
+        eventProxy.title = 'Investor Demo Night';
+        eventProxy.location = 'Bandra, Mumbai';
+        eventProxy.description = 'A focused demo for stakeholders. Networking and Q&A will follow.';
+        const d = new Date(); d.setDate(d.getDate() + 14);
+        eventProxy.date = d.toISOString().slice(0, 10);
+      });
+      $('#reset').addEventListener('click', () => {
+        eventProxy.title = 'Product Launch';
+        eventProxy.date = new Date().toISOString().slice(0, 10);
+        eventProxy.location = 'Mumbai, India';
+        eventProxy.description = 'Join us for the unveiling of our latest release. Limited seats — RSVP soon!';
+      });
+    }
+
+    // Registration
+    function renderRegister(root) {
+      const s = section('Registration');
+      s.innerHTML += `
+        <form id="regForm" novalidate>
+          <div class="field">
+            <label>Username</label>
+            <input class="input" id="regUsername" placeholder="yourname" required />
+            <div class="error" id="errUsername"></div>
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input class="input" id="regEmail" placeholder="you@example.com" required />
+            <div class="error" id="errEmail"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Password</label>
+              <input type="password" class="input" id="regPassword" placeholder="••••••" required />
+              <div class="error" id="errPassword"></div>
+            </div>
+            <div class="field">
+              <label>Confirm password</label>
+              <input type="password" class="input" id="regConfirm" placeholder="••••••" required />
+              <div class="error" id="errConfirm"></div>
+            </div>
+          </div>
+          <div class="muted">Password must be at least 6 characters, include a number and a letter.</div>
+          <div style="margin-top:0.6rem">
+            <button class="btn" type="submit">Register</button>
+            <button class="btn ghost" type="button" id="fillDemo">Fill demo data</button>
+          </div>
+          <div id="regStatus" style="margin-top:0.6rem"></div>
+        </form>
+      `;
+      root.appendChild(s);
+
+      const form = $('#regForm');
+      const username = $('#regUsername');
+      const email = $('#regEmail');
+      const password = $('#regPassword');
+      const confirm = $('#regConfirm');
+
+      function validate() {
+        let ok = true;
+        const errs = {
+          username: username.value.trim() ? '' : 'Username is required',
+          email: /^[^@]+@[^@]+\.[^@]+$/.test(email.value) ? '' : 'Valid email required',
+          password: /^(?=.*[A-Za-z])(?=.*\d).{6,}$/.test(password.value) ? '' : 'At least 6 chars, include number and letter',
+          confirm: password.value === confirm.value ? '' : 'Passwords do not match'
+        };
+        $('#errUsername').textContent = errs.username;
+        $('#errEmail').textContent = errs.email;
+        $('#errPassword').textContent = errs.password;
+        $('#errConfirm').textContent = errs.confirm;
+        ok = !errs.username && !errs.email && !errs.password && !errs.confirm;
+        return ok;
+      }
+
+      const liveValidate = debounce(validate, 150);
+      [username, email, password, confirm].forEach(el => el.addEventListener('input', liveValidate));
+
+      $('#fillDemo').addEventListener('click', () => {
+        username.value = 'rishi';
+        email.value = 'rishi@example.com';
+        password.value = 'pass123';
+        confirm.value = 'pass123';
+        validate();
+      });
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!validate()) { $('#regStatus').innerHTML = '<div class="error">Please fix validation errors.</div>'; return; }
+        // "Register" user — store a basic record
+        const users = store.get('users', []);
+        const exists = users.some(u => u.username.toLowerCase() === username.value.trim().toLowerCase());
+        if (exists) {
+          $('#regStatus').innerHTML = '<div class="warn">Username already exists. Try another.</div>';
+          return;
+        }
+        users.push({ username: username.value.trim(), email: email.value.trim() });
+        store.set('users', users);
+        $('#regStatus').innerHTML = '<div class="success">Registration successful. You can now login.</div>';
+      });
+    }
+
+    // Login
+    function renderLogin(root) {
+      const s = section('Login');
+      s.innerHTML += `
+        <div class="field">
+          <label>Username</label>
+          <input class="input" id="loginUsername" placeholder="yourname" />
+          <div class="error" id="loginErr"></div>
+        </div>
+        <div>
+          <button class="btn" id="loginBtn">Login</button>
+          <button class="btn secondary" id="goRegister">Go to register</button>
+        </div>
+      `;
+      root.appendChild(s);
+
+      $('#goRegister').addEventListener('click', () => go('/register'));
+      $('#loginBtn').addEventListener('click', () => {
+        const name = $('#loginUsername').value.trim();
+        if (!name) { $('#loginErr').textContent = 'Username is required'; return; }
+        const users = store.get('users', []);
+        const match = users.find(u => u.username.toLowerCase() === name.toLowerCase());
+        if (!match) { $('#loginErr').textContent = 'User not found. Please register.'; return; }
+        Session.set({ username: match.username, email: match.email });
+        go('/attendance');
+      });
+    }
+
+    // Attendance (requires auth)
+    function renderAttendance(root) {
+      const s = section('Attendance tracker');
+      const user = Session.get();
+      const key = `attendance.${user.username}`;
+      const records = store.get(key, []);
+
+      s.innerHTML += `
+        <p class="muted">Mark attendance for today. Your records are stored locally per user.</p>
+        <div>
+          <button class="btn" id="mark">Mark today</button>
+          <button class="btn secondary" id="clear">Clear all</button>
+        </div>
+        <ul class="list" id="list"></ul>
+      `;
+      root.appendChild(s);
+
+      function renderList() {
+        const list = $('#list'); list.innerHTML = '';
+        const recs = store.get(key, []);
+        if (recs.length === 0) {
+          const li = document.createElement('li'); li.className = 'muted'; li.textContent = 'No attendance yet.';
+          list.appendChild(li); return;
+        }
+        recs.forEach(d => {
+          const li = document.createElement('li'); li.textContent = `${formatDate(d)} ✓`;
+          list.appendChild(li);
+        });
+      }
+      renderList();
+
+      $('#mark').addEventListener('click', () => {
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const recs = store.get(key, []);
+        if (!recs.includes(todayISO)) {
+          recs.push(todayISO);
+          store.set(key, recs);
+          renderList();
+        }
+      });
+      $('#clear').addEventListener('click', () => {
+        store.set(key, []);
+        renderList();
+      });
+    }
+
+    // 404
+    function renderNotFound(root) {
+      const s = section('Not found');
+      const p = document.createElement('p'); p.className = 'muted'; p.textContent = 'The page you requested does not exist.';
+      const back = document.createElement('button'); back.className = 'btn secondary'; back.textContent = 'Go home';
+      back.addEventListener('click', () => go('/'));
+      s.append(p, back);
+      root.appendChild(s);
+    }
+  </script>
+</body>
+</html>
